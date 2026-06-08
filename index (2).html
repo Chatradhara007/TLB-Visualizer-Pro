@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TLB Visualizer Pro — Translation Lookaside Buffer</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;700;800&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d1526;
+      --bg2: #131f35;
+      --panel: #162340;
+      --border: #2a4a7a;
+      --border2: #1e3560;
+      --blue: #3db8ff;
+      --cyan: #00f0ff;
+      --green: #00f07a;
+      --green2: #00d46a;
+      --red: #ff4d80;
+      --orange: #ffaa00;
+      --yellow: #ffe040;
+      --text: #d8eaff;
+      --text2: #8aabcc;
+      --text3: #4a6a8a;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(61, 184, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(61, 184, 255, 0.05) 1px, transparent 1px);
+      background-size: 32px 32px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── LAYOUT ── */
+    #app {
+      position: relative;
+      z-index: 10;
+      display: grid;
+      grid-template-rows: 48px 1fr;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border2);
+      background: linear-gradient(180deg, rgba(61, 184, 255, 0.1) 0%, transparent 100%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .h-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      background: linear-gradient(135deg, #1a9fff, #00f0ff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      box-shadow: 0 0 14px rgba(61, 184, 255, 0.5);
+    }
+
+    .h-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -.3px;
+      background: linear-gradient(90deg, var(--blue), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .h-sub {
+      font-size: 9px;
+      color: var(--text3);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .h-badge {
+      margin-left: auto;
+      padding: 4px 12px;
+      background: rgba(61, 184, 255, 0.12);
+      border: 1px solid rgba(61, 184, 255, 0.35);
+      border-radius: 20px;
+      font-size: 9px;
+      color: var(--blue);
+      letter-spacing: 1px;
+    }
+
+    /* ── BODY GRID ── */
+    #body {
+      display: grid;
+      grid-template-columns: 240px 1fr 200px;
+      gap: 10px;
+      padding: 10px;
+      height: 100%;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ── PANELS ── */
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .panel-hd {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border2);
+      background: rgba(255, 255, 255, 0.03);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .pnum {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+      color: #000;
+      flex-shrink: 0;
+    }
+
+    .ptitle {
+      font-family: 'Syne', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .3px;
+      color: var(--text);
+    }
+
+    .panel-bd {
+      padding: 12px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── FORM ── */
+    .fg {
+      margin-bottom: 9px;
+    }
+
+    .flabel {
+      display: block;
+      font-size: 8px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 3px;
+    }
+
+    .fi {
+      width: 100%;
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 5px 9px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text);
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .fi:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(61, 184, 255, .15);
+    }
+
+    select.fi option {
+      background: var(--bg2);
+    }
+
+    .fhint {
+      font-size: 8px;
+      color: var(--text3);
+      margin-top: 2px;
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+
+    .grid2 .fg {
+      margin-bottom: 0;
+    }
+
+    .div {
+      height: 1px;
+      background: var(--border2);
+      margin: 10px 0;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 7px;
+      border: none;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: .3px;
+      transition: all .2s;
+      margin-bottom: 5px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #1a9fff, #3db8ff);
+      color: #000;
+      box-shadow: 0 3px 12px rgba(61, 184, 255, .4);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 5px 16px rgba(61, 184, 255, .5);
+    }
+
+    .btn-step {
+      background: rgba(0, 240, 255, .1);
+      color: var(--cyan);
+      border: 1px solid rgba(0, 240, 255, .3);
+    }
+
+    .btn-step:hover {
+      background: rgba(0, 240, 255, .18);
+    }
+
+    .btn-pause {
+      background: rgba(255, 170, 0, .1);
+      color: var(--orange);
+      border: 1px solid rgba(255, 170, 0, .3);
+    }
+
+    .btn-sec {
+      background: transparent;
+      color: var(--text2);
+      border: 1px solid var(--border);
+    }
+
+    .btn-sec:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    .btn-danger {
+      background: rgba(255, 77, 128, .1);
+      color: var(--red);
+      border: 1px solid rgba(255, 77, 128, .3);
+    }
+
+    .btn-danger:hover {
+      background: rgba(255, 77, 128, .2);
+    }
+
+    .sprow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+
+    .splbl {
+      font-size: 8px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .spslider {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 3px;
+      background: var(--border2);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .spslider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--blue);
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(61, 184, 255, .6);
+    }
+
+    .refq {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      margin-top: 5px;
+    }
+
+    .rfi {
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      font-size: 10px;
+      color: var(--text2);
+      transition: all .3s;
+    }
+
+    .rfi.active {
+      background: rgba(61, 184, 255, .2);
+      border-color: var(--blue);
+      color: var(--blue);
+      box-shadow: 0 0 8px rgba(61, 184, 255, .3);
+    }
+
+    .rfi.done {
+      opacity: .3;
+    }
+
+    .progbg {
+      height: 3px;
+      background: var(--border2);
+      border-radius: 2px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+
+    .progfill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--blue), var(--cyan));
+      border-radius: 2px;
+      transition: width .4s;
+      box-shadow: 0 0 8px rgba(61, 184, 255, .6);
+    }
+
+    /* ── TOOLTIPS ── */
+    .tt {
+      cursor: help;
+      border-bottom: 1px dotted var(--text3);
+      position: relative;
+    }
+
+    .tt-svg {
+      cursor: help;
+    }
+
+    /* ── VIZ ── */
+    #center-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .viz-panel {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .viz-wrap {
+      background: var(--bg2);
+      border-radius: 8px;
+      border: 1px solid var(--border2);
+      height: 100%;
+    }
+
+    #tlb-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .log-panel {
+      flex-shrink: 0;
+      height: 68px;
+    }
+
+    .logbox {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: 7px;
+      padding: 7px 12px;
+      height: 60px;
+      overflow-y: auto;
+      font-size: 10px;
+      line-height: 1.7;
+    }
+
+    .le {
+      color: var(--text2);
+    }
+
+    .le-hit {
+      color: var(--green);
+    }
+
+    .le-miss {
+      color: var(--red);
+    }
+
+    .le-info {
+      color: var(--blue);
+    }
+
+    .lts {
+      color: var(--text3);
+      margin-right: 6px;
+    }
+
+    /* ── STATS ── */
+    #right-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .sgrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .scard {
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: 10px 6px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .scard::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--ac, var(--blue));
+      opacity: .8;
+    }
+
+    .scard.green {
+      --ac: var(--green);
+    }
+
+    .scard.red {
+      --ac: var(--red);
+    }
+
+    .scard.cyan {
+      --ac: var(--cyan);
+    }
+
+    .scard.ora {
+      --ac: var(--orange);
+    }
+
+    .scard.yel {
+      --ac: var(--yellow);
+    }
+
+    .sv {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ac, var(--blue));
+      display: block;
+      line-height: 1;
+      margin-bottom: 5px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    }
+
+    .sl {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text3);
+      font-weight: 600;
+    }
+
+    .ttl {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text3);
+      margin-bottom: 6px;
+    }
+
+    .tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+
+    .tbl th {
+      padding: 4px 6px;
+      text-align: left;
+      font-size: 7px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text3);
+      border-bottom: 1px solid var(--border2);
+    }
+
+    .tbl td {
+      padding: 4px 6px;
+      border-bottom: 1px solid rgba(30, 53, 96, .3);
+      color: var(--text2);
+    }
+
+    .tbl tr.tr-hit td {
+      color: var(--green);
+      background: rgba(0, 240, 122, .06);
+    }
+
+    .tbl tr.tr-miss td {
+      color: var(--red);
+      background: rgba(255, 77, 128, .06);
+    }
+
+    .bh {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(0, 240, 122, .15);
+      color: var(--green);
+      font-size: 8px;
+    }
+
+    .bm {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: rgba(255, 77, 128, .15);
+      color: var(--red);
+      font-size: 8px;
+    }
+
+    .tbl-wrap {
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+
+    ::-webkit-scrollbar {
+      width: 3px;
+      height: 3px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px;
+    }
+
+    @keyframes fadein {
+      from {
+        opacity: 0;
+        transform: translateY(3px)
+      }
+
+      to {
+        opacity: 1;
+        transform: none
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+
+    <header>
+      <div class="h-icon">⚡</div>
+      <div>
+        <div class="h-title">TLB VISUALIZER</div>
+        <div class="h-sub">Translation Lookaside Buffer — Interactive Simulation</div>
+      </div>
+      <div class="h-badge">OS Architecture Lab</div>
+    </header>
+
+    <div id="body">
+
+      <div class="panel">
+        <div class="panel-hd">
+          <div class="pnum">1</div><span class="ptitle">Configuration & Input</span>
+        </div>
+        <div class="panel-bd">
+          <div class="grid2">
+            <div class="fg"><label class="flabel">TLB Entries</label>
+              <input type="number" class="fi" id="tlb-size" value="4" min="2" max="12">
+            </div>
+            <div class="fg"><label class="flabel">Phys Frames</label>
+              <input type="number" class="fi" id="num-frames" value="8" min="4" max="16">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="fg"><label class="flabel">Logic Pages</label>
+              <input type="number" class="fi" id="num-pages" value="16" min="4" max="16">
+            </div>
+            <div class="fg"><label class="flabel">Page Size</label>
+              <select class="fi" id="page-bits">
+                <option value="2">2-bit (4B)</option>
+                <option value="4" selected>4-bit (16B)</option>
+                <option value="8">8-bit (256B)</option>
+                <option value="12">12-bit (4KB)</option>
+              </select>
+            </div>
+          </div>
+          <div class="div"></div>
+          <div class="fg"><label class="flabel">Replacement Policy</label>
+            <select class="fi" id="replace-policy">
+              <option value="LRU" selected>LRU</option>
+              <option value="FIFO">FIFO</option>
+              <option value="RANDOM">Random</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label class="flabel">Page Reference String</label>
+            <input type="text" class="fi" id="ref-string" value="7,0,1,2,0,3,0,4,2,3,0,3,2,1,2,0,1,7,0,1"
+              placeholder="e.g. 1,3,0,3,5,6">
+            <div class="fhint">Comma-separated page numbers</div>
+            <div class="refq" id="ref-display"></div>
+          </div>
+          <div class="div"></div>
+          <div class="grid2">
+            <div class="fg"><label class="flabel">TLB Time (ns)</label>
+              <input type="number" class="fi" id="tlb-time" value="10" min="1">
+            </div>
+            <div class="fg"><label class="flabel">Mem Time (ns)</label>
+              <input type="number" class="fi" id="mem-time" value="100" min="1">
+            </div>
+          </div>
+          <div class="sprow">
+            <span class="splbl">Speed</span>
+            <input type="range" class="spslider" id="speed" min="1" max="7" value="4" step="1">
+            <span style="font-size:9px;color:var(--text2)" id="spd-lbl">Normal</span>
+          </div>
+          <button class="btn btn-primary" id="btn-run" onclick="startSim()">▶ Run Simulation</button>
+          <button class="btn btn-step" id="btn-step" onclick="stepSim()">⏭ Step Through</button>
+          <button class="btn btn-pause" id="btn-pause" onclick="togglePause()" style="display:none">⏸ Pause</button>
+
+          <div class="grid2" style="margin-top:5px;">
+            <button class="btn btn-sec" onclick="resetSim()" style="margin-bottom:0;">↺ Reset</button>
+            <button class="btn btn-danger" onclick="flushTLB()" style="margin-bottom:0;"
+              title="Simulate a Context Switch (Clears the TLB)">🗑 Flush TLB</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="center-col">
+        <div class="panel viz-panel">
+          <div class="panel-hd">
+            <div class="pnum">2</div><span class="ptitle">TLB Architecture — Live Visualization</span>
+          </div>
+          <div style="padding:8px 12px 4px;flex-shrink:0;">
+            <div class="progbg">
+              <div class="progfill" id="prog" style="width:0%"></div>
+            </div>
+          </div>
+          <div style="flex:1;padding:0 12px 8px;min-height:0;">
+            <div class="viz-wrap">
+              <svg id="tlb-svg" viewBox="0 0 920 480" xmlns="http://www.w3.org/2000/svg"
+                preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <filter id="gb" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="4" result="b" />
+                    <feMerge>
+                      <feMergeNode in="b" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                  <marker id="ab" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+                    <path d="M0,0 L0,7 L8,3.5 z" fill="#3db8ff" />
+                  </marker>
+                  <marker id="ag" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+                    <path d="M0,0 L0,7 L8,3.5 z" fill="#00f07a" />
+                  </marker>
+                  <marker id="ar" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+                    <path d="M0,0 L0,7 L8,3.5 z" fill="#ff4d80" />
+                  </marker>
+                  <marker id="ao" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+                    <path d="M0,0 L0,7 L8,3.5 z" fill="#ffaa00" />
+                  </marker>
+                  <linearGradient id="cpu-g" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#1a4070" />
+                    <stop offset="100%" style="stop-color:#0d2040" />
+                  </linearGradient>
+                  <linearGradient id="tlb-g" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#162a55" />
+                    <stop offset="100%" style="stop-color:#0a1630" />
+                  </linearGradient>
+                  <linearGradient id="pt-g" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#2a2010" />
+                    <stop offset="100%" style="stop-color:#120e08" />
+                  </linearGradient>
+                  <linearGradient id="ram-g" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:#103a22" />
+                    <stop offset="100%" style="stop-color:#081810" />
+                  </linearGradient>
+                </defs>
+
+                <rect x="16" y="50" width="78" height="48" rx="7" fill="url(#cpu-g)" stroke="#3db8ff"
+                  stroke-width="2" />
+                <text x="55" y="72" text-anchor="middle" fill="#3db8ff" font-family="Syne" font-size="15"
+                  font-weight="800">CPU</text>
+                <text x="55" y="87" text-anchor="middle" fill="#4a6a9a" font-family="JetBrains Mono"
+                  font-size="7.5">Processor</text>
+
+                <line x1="94" y1="74" x2="136" y2="74" stroke="#3db8ff" stroke-width="1.8" marker-end="url(#ab)" />
+
+                <text x="182" y="36" text-anchor="middle" fill="#4a6a8a" font-family="JetBrains Mono"
+                  font-size="9">Logical Address</text>
+                <rect x="136" y="48" width="92" height="48" rx="5" fill="#081428" stroke="#3db8ff" stroke-width="1.8"
+                  id="la-outer" />
+                <rect x="136" y="48" width="46" height="48" rx="5" fill="#133a6a" stroke="#3db8ff" stroke-width="1.8"
+                  id="p-box" />
+                <text x="159" y="68" text-anchor="middle" fill="#3db8ff" font-family="Syne" font-size="16"
+                  font-weight="800" id="p-lbl">P</text>
+                <text x="159" y="86" text-anchor="middle" fill="#2090e0" font-family="JetBrains Mono" font-size="10"
+                  font-weight="700" id="p-val">—</text>
+                <rect x="182" y="48" width="46" height="48" rx="5" fill="#060e1a" stroke="#3db8ff" stroke-width="0.8"
+                  id="d-box" />
+
+                <text x="205" y="68" text-anchor="middle" fill="#2a4a6a" font-family="Syne" font-size="16"
+                  font-weight="800" class="tt-svg">d<title>Offset (d): The specific location within the page/frame. It
+                    remains unchanged during address translation.</title></text>
+                <text x="205" y="86" text-anchor="middle" fill="#1e3860" font-family="JetBrains Mono" font-size="10"
+                  font-weight="700" id="d-val">—</text>
+
+                <rect x="340" y="42" width="210" height="280" rx="8" fill="url(#tlb-g)" stroke="#2a4a80"
+                  stroke-width="1.8" id="tlb-outer" />
+                <text x="445" y="63" text-anchor="middle" fill="#3db8ff" font-family="Syne" font-size="13"
+                  font-weight="800">TLB</text>
+                <text x="445" y="75" text-anchor="middle" fill="#2a4080" font-family="JetBrains Mono" font-size="7.5"
+                  class="tt-svg">Associative Memory<title>Associative Memory: Content-addressable memory where data is
+                    found by its content (Page #) rather than a physical address, allowing rapid parallel searches.
+                  </title></text>
+                <line x1="344" y1="82" x2="546" y2="82" stroke="#1e3a60" stroke-width="0.6" />
+                <text x="395" y="94" text-anchor="middle" fill="#2a5080" font-family="JetBrains Mono"
+                  font-size="7.5">Page #</text>
+                <text x="497" y="94" text-anchor="middle" fill="#2a5080" font-family="JetBrains Mono"
+                  font-size="7.5">Frame #</text>
+                <line x1="445" y1="82" x2="445" y2="322" stroke="#1e3a60" stroke-width="0.5" />
+
+                <g id="tlb-rows"></g>
+
+                <text x="575" y="135" fill="#00f07a" font-family="JetBrains Mono" font-size="9" font-weight="700"
+                  id="hit-lbl" opacity="0">TLB HIT ✓</text>
+                <line x1="550" y1="145" x2="638" y2="145" stroke="#00f07a" stroke-width="2" marker-end="url(#ag)"
+                  id="hit-arrow" opacity="0" />
+
+                <text x="683" y="108" text-anchor="middle" fill="#2a5040" font-family="JetBrains Mono"
+                  font-size="8">Physical Address</text>
+
+                <rect x="638" y="118" width="88" height="44" rx="5" fill="#060e0a" stroke="#00f07a" stroke-width="1.8"
+                  id="fd-outer" opacity="0" />
+                <rect x="638" y="118" width="44" height="44" rx="5" fill="#0d2c1a" stroke="#00f07a" stroke-width="1.8"
+                  id="f-box" opacity="0" />
+                <text x="660" y="138" text-anchor="middle" fill="#00f07a" font-family="Syne" font-size="16"
+                  font-weight="800" id="f-lbl" opacity="0">f</text>
+                <text x="660" y="154" text-anchor="middle" fill="#00c860" font-family="JetBrains Mono" font-size="9"
+                  font-weight="700" id="f-val" opacity="0">—</text>
+                <rect x="682" y="118" width="44" height="44" rx="5" fill="#040a06" stroke="#00f07a" stroke-width="0.8"
+                  id="fd-d" opacity="0" />
+                <text x="704" y="138" text-anchor="middle" fill="#1a5030" font-family="Syne" font-size="16"
+                  font-weight="800" id="fd-dlbl" opacity="0">d</text>
+                <text x="704" y="154" text-anchor="middle" fill="#143820" font-family="JetBrains Mono" font-size="9"
+                  font-weight="700" id="fd-dval" opacity="0">—</text>
+
+                <line x1="726" y1="140" x2="796" y2="140" stroke="#00f07a" stroke-width="2" marker-end="url(#ag)"
+                  id="fd-ram" opacity="0" />
+
+                <rect x="798" y="28" width="88" height="276" rx="7" fill="url(#ram-g)" stroke="#00f07a"
+                  stroke-width="1.8" id="ram-rect" />
+                <text x="842" y="50" text-anchor="middle" fill="#00f07a" font-family="Syne" font-size="13"
+                  font-weight="800">RAM</text>
+                <text x="842" y="62" text-anchor="middle" fill="#185028" font-family="JetBrains Mono"
+                  font-size="7">frames</text>
+                <g id="ram-rows"></g>
+
+                <line x1="159" y1="126" x2="159" y2="340" stroke="#ff4d80" stroke-width="1.8" marker-end="url(#ar)"
+                  id="miss-vline" opacity="0" />
+                <text x="248" y="352" fill="#ff4d80" font-family="JetBrains Mono" font-size="9" font-weight="700"
+                  id="miss-lbl" opacity="0">TLB MISS ✗</text>
+
+                <rect x="100" y="344" width="80" height="52" rx="5" fill="#22081a" stroke="#ff4d80" stroke-width="1.6"
+                  id="mm-box" opacity="0" />
+                <text x="140" y="366" text-anchor="middle" fill="#ff4d80" font-family="Syne" font-size="13"
+                  font-weight="800" id="mm-lbl" opacity="0">M/</text>
+                <text x="140" y="381" text-anchor="middle" fill="#8a2848" font-family="JetBrains Mono" font-size="7.5"
+                  id="mm-s1" opacity="0">memory</text>
+                <text x="140" y="391" text-anchor="middle" fill="#8a2848" font-family="JetBrains Mono" font-size="7.5"
+                  id="mm-s2" opacity="0">reference</text>
+
+                <line x1="180" y1="370" x2="338" y2="370" stroke="#ffaa00" stroke-width="1.8" marker-end="url(#ao)"
+                  id="mm-pt" opacity="0" />
+
+                <rect x="340" y="335" width="210" height="130" rx="8" fill="url(#pt-g)" stroke="#4a3a10"
+                  stroke-width="1.5" id="pt-outer" />
+                <text x="445" y="355" text-anchor="middle" fill="#ffaa00" font-family="Syne" font-size="12"
+                  font-weight="700">Page Table</text>
+                <text x="445" y="367" text-anchor="middle" fill="#3a3010" font-family="JetBrains Mono" font-size="7">in
+                  Main Memory</text>
+                <g id="pt-rows"></g>
+                <rect x="380" y="374" width="130" height="28" rx="4" fill="#221c08" stroke="#ffaa00" stroke-width="1.6"
+                  id="pt-fbox" opacity="0" />
+                <text x="415" y="390" text-anchor="middle" fill="#ffaa00" font-family="JetBrains Mono" font-size="8"
+                  id="pt-fn-lbl" opacity="0">frame no.</text>
+                <text x="480" y="392" text-anchor="middle" fill="#ffe040" font-family="JetBrains Mono" font-size="12"
+                  font-weight="700" id="pt-fn-val" opacity="0">—</text>
+                <text x="445" y="426" text-anchor="middle" fill="#3a3010" font-family="JetBrains Mono" font-size="14">·
+                  · ·</text>
+                <text x="445" y="442" text-anchor="middle" fill="#2a2208" font-family="JetBrains Mono" font-size="8"
+                  id="pt-seeking" opacity="0"></text>
+
+                <path d="M 480 374 C 520 374, 520 330, 460 322" stroke="#ffaa00" stroke-width="1.8" fill="none"
+                  stroke-dasharray="4,3" marker-end="url(#ao)" id="pt-tlb-path" opacity="0" />
+                <text x="515" y="340" fill="#ffaa00" font-family="JetBrains Mono" font-size="8" id="pt-tlb-lbl"
+                  opacity="0">Caching...</text>
+
+                <path d="M 550 385 C 620 385 680 280 682 162" stroke="#ffaa00" stroke-width="1.8" fill="none"
+                  marker-end="url(#ao)" id="pt-fd-path" opacity="0" />
+
+                <rect x="580" y="400" width="330" height="60" rx="7" fill="#0e1c30" stroke="#243a58" stroke-width="1" />
+                <text x="590" y="416" fill="#2a4060" font-family="JetBrains Mono" font-size="7.5">CURRENT STEP</text>
+                <text x="590" y="432" fill="#7aaaca" font-family="JetBrains Mono" font-size="9" id="step-a">Idle —
+                  configure and run</text>
+                <text x="590" y="446" fill="#2a4a6a" font-family="JetBrains Mono" font-size="8" id="step-b"></text>
+
+                <text x="20" y="416" fill="#2a4060" font-family="JetBrains Mono" font-size="7.5">PROJECT BY</text>
+                <text x="20" y="432" fill="#7aaaca" font-family="JetBrains Mono" font-size="9" id="step-a">HANESH -
+                  CHATRADHARA - ANISH - ABHIRAM - LOKESH</text>
+
+                <rect x="344" y="100" width="198" height="24" rx="2" fill="#3db8ff" opacity="0" id="scan-beam" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" style="flex-shrink:0;">
+          <div class="panel-bd" style="padding:8px 12px;">
+            <div class="logbox" id="logbox">
+              <div class="le"><span class="lts">[00:00]</span><span class="le-info">System ready. Configure and press
+                  Run.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="right-col">
+        <div class="panel" style="flex-shrink:0;">
+          <div class="panel-hd">
+            <div class="pnum">3</div><span class="ptitle">Statistics</span>
+          </div>
+          <div class="panel-bd" style="padding:10px;">
+            <div class="sgrid">
+              <div class="scard"><span class="sv" id="s-total">0</span><span class="sl">References</span></div>
+              <div class="scard green"><span class="sv" id="s-hits">0</span><span class="sl">Hits</span></div>
+              <div class="scard red"><span class="sv" id="s-misses">0</span><span class="sl">Misses</span></div>
+              <div class="scard cyan"><span class="sv" id="s-hr">0%</span><span class="sl">Hit Ratio</span></div>
+              <div class="scard ora"><span class="sv" id="s-mr">0%</span><span class="sl">Miss Ratio</span></div>
+              <div class="scard yel"><span class="sv" id="s-emat">—</span><span class="sl tt"
+                  title="Effective Memory Access Time: Average time taken to access memory, factoring in the faster TLB hits and slower misses.">EMAT
+                  (ns)</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" style="flex:1;min-height:0;">
+          <div class="panel-hd">
+            <div class="pnum" style="background:linear-gradient(135deg,var(--cyan),var(--green))">4</div><span
+              class="ptitle">TLB State</span>
+          </div>
+          <div class="panel-bd" style="padding:8px;">
+            <div class="ttl">Current Entries</div>
+            <div style="overflow-y:auto;max-height:160px;margin-bottom:10px;">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>Slot</th>
+                    <th>Page</th>
+                    <th>Frame</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="snap-tb"></tbody>
+              </table>
+            </div>
+            <div class="ttl">Access History</div>
+            <div style="overflow-y:auto;flex:1;">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Pg</th>
+                    <th>Result</th>
+                    <th>Fr</th>
+                    <th>EMAT</th>
+                  </tr>
+                </thead>
+                <tbody id="hist-tb"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <script>
+    // ════════ STATE ════════
+    const S = {
+      running: false, stepMode: false, paused: false, idx: 0,
+      tlb: [], pageTable: {}, refStr: [], ram: [],
+      tlbSize: 8, numFrames: 8, numPages: 8, pageBits: 4,
+      policy: 'LRU', tlbT: 10, memT: 100,
+      hits: 0, misses: 0, history: [],
+      lruCtr: 0, frameCtr: 0,
+      fifoPtr: 0
+    };
+    const R_H = 24; const R_Y0 = 100;
+    const TLB_LEFT = 344; const TLB_RIGHT = 546; const TLB_MID = 445;
+
+    // ════════ INIT ════════
+    document.getElementById('ref-string').addEventListener('input', renderRefQ);
+    document.getElementById('speed').addEventListener('input', function () {
+      const labels = ['', 'Very Slow', 'Slow', 'Slow+', 'Normal', 'Fast+', 'Fast', 'Very Fast'];
+      document.getElementById('spd-lbl').textContent = labels[+this.value] || 'Normal';
+    });
+    window.onload = () => { renderRefQ(); buildAll(8, 8); renderSnap([]); };
+
+    // ════════ SVG BUILDERS ════════
+    function ns(tag, a) {
+      const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      Object.entries(a).forEach(([k, v]) => e.setAttribute(k, v)); return e;
+    }
+    function buildAll(tlbSize, nFrames) {
+      buildTlbRows(tlbSize); buildRamRows(nFrames); buildPtLines();
+    }
+    function buildTlbRows(n) {
+      const g = document.getElementById('tlb-rows'); g.innerHTML = '';
+
+      // Create dynamic vertical bus based on TLB size
+      const lastY = R_Y0 + (n - 1) * R_H + R_H / 2;
+      g.appendChild(ns('line', { x1: '159', y1: '96', x2: '159', y2: lastY, stroke: '#1e5090', 'stroke-width': '1.5', id: 'v-bus-dyn', opacity: '0' }));
+
+      for (let i = 0; i < n; i++) {
+        const y = R_Y0 + i * R_H; const rowG = ns('g', { id: `tr-${i}` });
+        rowG.appendChild(ns('rect', {
+          x: TLB_LEFT, y, width: TLB_RIGHT - TLB_LEFT, height: R_H - 1, rx: '2',
+          fill: '#0c1a30', stroke: '#1e3660', 'stroke-width': '0.5', id: `tr-bg-${i}`
+        }));
+        const midY = y + R_H / 2;
+        // Horizontal branch from the vertical bus
+        rowG.appendChild(ns('line', {
+          x1: '159', y1: midY, x2: TLB_LEFT - 4, y2: midY,
+          stroke: '#1e3660', 'stroke-width': '1.2', 'marker-end': 'url(#ab)', id: `tr-arr-${i}`, opacity: '0'
+        }));
+        const pt = ns('text', {
+          x: TLB_MID - 48, y: y + 16, 'text-anchor': 'middle',
+          fill: '#2a4a70', 'font-family': 'JetBrains Mono', 'font-size': '11', id: `tr-p-${i}`
+        });
+        pt.textContent = '—'; rowG.appendChild(pt);
+        const ft = ns('text', {
+          x: TLB_MID + 50, y: y + 16, 'text-anchor': 'middle',
+          fill: '#2a4a70', 'font-family': 'JetBrains Mono', 'font-size': '11', id: `tr-f-${i}`
+        });
+        ft.textContent = '—'; rowG.appendChild(ft);
+        g.appendChild(rowG);
+      }
+    }
+    function buildRamRows(n) {
+      const g = document.getElementById('ram-rows'); g.innerHTML = '';
+      const maxShow = Math.min(n, 9); const areaH = 218; const rh = Math.floor(areaH / maxShow);
+      for (let i = 0; i < maxShow; i++) {
+        const y = 74 + i * rh; const rowG = ns('g', { id: `ram-g-${i}` });
+        rowG.appendChild(ns('rect', {
+          x: '802', y, width: '82', height: rh - 1, rx: '1',
+          fill: '#0c2218', stroke: '#0e2e1a', 'stroke-width': '0.6', id: `ram-bg-${i}`
+        }));
+        const lt = ns('text', {
+          x: '843', y: y + rh / 2 + 4, 'text-anchor': 'middle',
+          fill: '#185028', 'font-family': 'JetBrains Mono', 'font-size': '8.5', id: `ram-lbl-${i}`
+        });
+        lt.textContent = 'F' + i; rowG.appendChild(lt); g.appendChild(rowG);
+      }
+      if (n > maxShow) {
+        const dt = ns('text', { x: '843', y: '300', 'text-anchor': 'middle', fill: '#185028', 'font-family': 'JetBrains Mono', 'font-size': '14' });
+        dt.textContent = '· · ·'; g.appendChild(dt);
+      }
+    }
+    function buildPtLines() {
+      const g = document.getElementById('pt-rows'); g.innerHTML = '';
+      for (let i = 0; i < 3; i++) {
+        g.appendChild(ns('line', { x1: '344', y1: 406 + i * 14, x2: '546', y2: 406 + i * 14, stroke: '#2e2408', 'stroke-width': '0.5' }));
+      }
+    }
+    function renderRefQ() {
+      const pages = parseRef();
+      document.getElementById('ref-display').innerHTML =
+        pages.map((p, i) => `<span class="rfi" id="rfi-${i}">${p}</span>`).join('');
+    }
+
+    // ════════ CONFIG ════════
+    function parseRef() {
+      return document.getElementById('ref-string').value
+        .split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    }
+    function readCfg() {
+      S.tlbSize = +document.getElementById('tlb-size').value || 8;
+      S.numFrames = +document.getElementById('num-frames').value || 8;
+      S.numPages = +document.getElementById('num-pages').value || 8;
+      S.pageBits = +document.getElementById('page-bits').value || 4;
+      S.policy = document.getElementById('replace-policy').value;
+      S.tlbT = +document.getElementById('tlb-time').value || 10;
+      S.memT = +document.getElementById('mem-time').value || 100;
+      S.refStr = parseRef();
+    }
+    function spd() {
+      const m = { 1: 8000, 2: 5000, 3: 3000, 4: 1500, 5: 900, 6: 500, 7: 250 };
+      return m[+document.getElementById('speed').value] || 1500;
+    }
+    function sleep(ms) {
+      return new Promise(resolve => {
+        const start = Date.now();
+        function tick() {
+          if (!S.paused) { const r = ms - (Date.now() - start); if (r <= 0) { resolve(); return; } setTimeout(tick, Math.min(r, 50)); }
+          else setTimeout(tick, 100);
+        } tick();
+      });
+    }
+
+    // ════════ SIM CONTROL ════════
+    async function startSim() {
+      if (S.running) return;
+      resetSim(); readCfg(); renderRefQ();
+      buildAll(S.tlbSize, S.numFrames); buildPageTable();
+      S.running = true; S.stepMode = false;
+      document.getElementById('btn-run').textContent = '⏸ Running...';
+      document.getElementById('btn-pause').style.display = 'block';
+      document.getElementById('btn-pause').textContent = '⏸ Pause';
+      for (let i = 0; i < S.refStr.length; i++) {
+        if (!S.running || S.stepMode) break;
+        await processRef(i); 
+        setProgress((i + 1) / S.refStr.length * 100);
+        await sleep(spd());
+      }
+      S.idx = S.refStr.length; finish();
+    }
+    async function stepSim() {
+      if (!S.running) {
+        resetSim(); readCfg(); renderRefQ();
+        buildAll(S.tlbSize, S.numFrames); buildPageTable();
+        S.running = true; S.stepMode = true;
+        document.getElementById('btn-run').textContent = '⏸ Step Mode';
+      }
+      if (S.idx >= S.refStr.length) { finish(); return; }
+      await processRef(S.idx++); setProgress(S.idx / S.refStr.length * 100);
+      if (S.idx >= S.refStr.length) finish();
+    }
+    function resetSim() {
+      S.running = false; S.stepMode = false; S.idx = 0;
+      S.tlb = []; S.pageTable = {}; S.ram = []; S.hits = 0; S.misses = 0; S.history = [];
+      S.lruCtr = 0; S.frameCtr = 0;
+      S.fifoPtr = 0;
+      readCfg(); renderRefQ(); buildAll(S.tlbSize, S.numFrames);
+      clearPaths(); updateStats(); renderSnap([]);
+      document.getElementById('hist-tb').innerHTML = '';
+      document.getElementById('btn-run').textContent = '▶ Run Simulation';
+      document.getElementById('btn-pause').style.display = 'none';
+      setStep('Idle — configure and run', '');
+      addLog('System reset. Ready.', 'le-info');
+      setProgress(0); resetAddr(); resetRam();
+    }
+    function flushTLB() {
+      S.tlb = [];
+      updateTlbViz();
+      renderSnap(S.tlb);
+      addLog('TLB Flushed (Context Switch Simulated)', 'le-miss');
+      setStep('TLB Flushed', 'Simulating context switch. All previous mappings have been cleared.');
+    }
+    function buildPageTable() {
+      S.pageTable = {};
+      // Page table mappings will be added dynamically as pages are loaded into RAM
+    }
+
+    // ════════ CORE LOGIC ════════
+    async function processRef(i) {
+      const page = S.refStr[i];
+      const offset = Math.floor(Math.random() * Math.pow(2, S.pageBits));
+      const d = S.stepMode ? 700 : Math.floor(spd() * 0.3);
+
+      document.querySelectorAll('.rfi').forEach(e => e.classList.remove('active'));
+      const qi = document.getElementById(`rfi-${i}`);
+      if (qi) qi.classList.add('active');
+
+      clearPaths();
+      resetRam();
+      showAddr(page, offset);
+      setStep(`CPU issues Logical Address: Page = ${page}, Offset = ${offset}`, 'Address split into P (page number) and d (offset)');
+      await sleep(d);
+      setStep(`Associative search: checking all ${S.tlbSize} TLB entries for Page ${page}`, '');
+      await sweepBeam(S.tlbSize, d);
+
+      const hit = tlbSearch(page);
+      let frame, emat;
+
+      if (hit) {
+        // 1. TLB HIT
+        frame = hit.frame; emat = S.tlbT + S.memT; S.hits++;
+
+        // Updating Last Used for LRU
+        if (S.policy === 'LRU') {
+          hit.lruAge = ++S.lruCtr;
+          const ramEntry = S.ram.find(r => r.frameIdx === frame);
+          if (ramEntry) ramEntry.lruAge = S.lruCtr;
+        }
+
+        setStep(`TLB HIT ✓  Page ${page} → Frame ${frame}`, `EMAT = tlbT + memT = ${S.tlbT} + ${S.memT} = ${emat} ns`);
+        addLog(`Page ${page} → TLB HIT → Frame ${frame} | EMAT: ${emat} ns`, 'le-hit');
+        await animHit(frame, offset, d);
+      } else {
+        // 2. TLB MISS
+        emat = S.tlbT + 2 * S.memT; S.misses++;
+
+        // Check if Page is in RAM
+        let ramEntry = S.ram.find(r => r.page === page);
+
+        if (!ramEntry) {
+          // PAGE FAULT - Need to load into Physical RAM
+          if (S.ram.length < S.numFrames) {
+            // RAM has space
+            frame = S.ram.length;
+            S.ram.push({ frameIdx: frame, page: page, lruAge: ++S.lruCtr });
+          } else {
+            // RAM is FULL - LRU Page Replacement
+            let victim = S.ram.reduce((prev, curr) => prev.lruAge < curr.lruAge ? prev : curr);
+            frame = victim.frameIdx;
+            let oldPage = victim.page;
+
+            // CRITICAL: TLB Shootdown - Invalidate TLB entries pointing to the evicted frame
+            S.tlb = S.tlb.filter(entry => entry.frame !== frame);
+
+            // Invalidate old mapping in Page Table
+            S.pageTable[oldPage] = undefined;
+
+            // Load new page into victim's frame
+            victim.page = page;
+            victim.lruAge = ++S.lruCtr;
+          }
+          // Update Page Table
+          S.pageTable[page] = frame;
+        } else {
+          // Page is in RAM but not in TLB
+          frame = ramEntry.frameIdx;
+          // FIX: Only update recency for LRU
+          if (S.policy === 'LRU') {
+            ramEntry.lruAge = ++S.lruCtr;
+          }
+        }
+
+        setStep(`TLB MISS ✗  Page ${page} not found — going to Page Table`, `EMAT = tlbT + 2×memT = ${S.tlbT} + 2×${S.memT} = ${emat} ns`);
+        addLog(`Page ${page} → TLB MISS → Page Table → Frame ${frame} | EMAT: ${emat} ns`, 'le-miss');
+
+        tlbInsert(page, frame);
+        await animMiss(frame, offset, d);
+      }
+
+      S.history.push({ n: i + 1, page, isHit: !!hit, frame, emat });
+      updateTlbViz(); updateStats(); renderSnap([...S.tlb]);
+      addHistRow(i + 1, page, !!hit, frame, emat);
+      updateRamDisplay();
+      hlRamFrame(frame);
+      if (qi) { qi.classList.remove('active'); qi.classList.add('done'); }
+    }
+
+    // ════════ TLB OPS ════════
+    function tlbSearch(p) { return S.tlb.find(e => e.page === p) || null; }
+
+    function tlbInsert(page, frame) {
+      S.lruCtr++;
+      const newEntry = { page, frame, lruAge: S.lruCtr };
+
+      if (S.tlb.length < S.tlbSize) {
+        // Still have space, just add it
+        S.tlb.push(newEntry);
+      } else {
+        let ri = 0; // Index of the entry to replace
+
+        if (S.policy === 'FIFO') {
+          // For FIFO, we replace the very first entry (index 0) 
+          // and shift the rest, or just overwrite index 0.
+          // Using your index-based style:
+          ri = S.fifoPtr;
+          S.fifoPtr = (S.fifoPtr + 1) % S.tlbSize;
+        } else if (S.policy === 'LRU') {
+          // Find the entry with the smallest lruAge
+          let mn = Infinity;
+          S.tlb.forEach((e, i) => {
+            if (e.lruAge < mn) { mn = e.lruAge; ri = i; }
+          });
+        } else if (S.policy === 'RANDOM') {
+          ri = Math.floor(Math.random() * S.tlbSize);
+        }
+
+        S.tlb[ri] = newEntry;
+      }
+    }
+
+    // ════════ ANIMATIONS ════════
+    async function sweepBeam(n, d) {
+      const beam = document.getElementById('scan-beam');
+      const stepT = Math.max(40, Math.floor(d * 0.45 / n));
+      for (let i = 0; i < n; i++) {
+        beam.setAttribute('y', R_Y0 + i * R_H); beam.setAttribute('opacity', '0.2');
+        const bg = document.getElementById(`tr-bg-${i}`);
+        const arr = document.getElementById(`tr-arr-${i}`);
+        if (bg) { bg.setAttribute('fill', '#1a3060'); bg.setAttribute('stroke', '#3db8ff'); }
+        if (arr) { arr.setAttribute('opacity', '1'); arr.setAttribute('stroke', '#3db8ff'); }
+        await sleep(stepT);
+        if (bg) { bg.setAttribute('fill', '#0c1a30'); bg.setAttribute('stroke', '#1e3660'); }
+        if (arr) { arr.setAttribute('opacity', '0.1'); arr.setAttribute('stroke', '#1e3660'); }
+      }
+      beam.setAttribute('opacity', '0');
+    }
+    async function animHit(frame, offset, d) {
+      show('hit-lbl');
+      for (let i = 0; i < S.tlbSize; i++) { const a = document.getElementById(`tr-arr-${i}`); if (a) a.setAttribute('opacity', '0.05'); }
+      await sleep(d * 0.5);
+      show('hit-arrow'); await sleep(d * 0.4);
+      show('fd-outer'); show('f-box'); show('f-lbl'); show('f-val');
+      show('fd-d'); show('fd-dlbl'); show('fd-dval');
+      setTxt('f-val', frame); setTxt('fd-dval', offset);
+      await sleep(d * 0.5);
+      show('fd-ram'); glow('ram-rect', '#00f07a');
+    }
+    async function animMiss(frame, offset, d) {
+      show('miss-vline'); await sleep(d * 0.5);
+      show('miss-lbl'); show('mm-box'); show('mm-lbl'); show('mm-s1'); show('mm-s2');
+      await sleep(d * 0.5);
+      show('mm-pt'); await sleep(d * 0.4);
+      show('pt-fbox'); show('pt-fn-lbl');
+      setTxt('pt-fn-val', frame); show('pt-fn-val');
+      
+      setTxt('pt-seeking', `seeking page ${S.refStr[S.idx] || '...'}`);
+      show('pt-seeking'); await sleep(d * 0.6);
+
+      // Animate TLB Caching Update with modified text
+      show('pt-tlb-path'); show('pt-tlb-lbl');
+      setStep(`TLB Update: Caching Page ${S.refStr[S.idx]} → Frame ${frame}`, '');
+      await sleep(d * 0.4);
+      updateTlbViz(); // Visually update the TLB rows mid-animation as the path arrives
+      await sleep(d * 0.3);
+
+      // Proceed to Physical Memory access
+      show('pt-fd-path');
+      show('fd-outer'); show('f-box'); show('f-lbl'); show('f-val');
+      show('fd-d'); show('fd-dlbl'); show('fd-dval');
+      setTxt('f-val', frame); setTxt('fd-dval', offset);
+      await sleep(d * 0.5);
+      show('fd-ram'); glow('ram-rect', '#ffaa00');
+    }
+    function clearPaths() {
+      ['hit-lbl', 'hit-arrow', 'fd-outer', 'f-box', 'f-lbl', 'f-val', 'fd-d', 'fd-dlbl', 'fd-dval',
+        'fd-ram', 'miss-vline', 'miss-lbl', 'mm-box', 'mm-lbl', 'mm-s1', 'mm-s2', 'mm-pt',
+        'pt-fbox', 'pt-fn-lbl', 'pt-fn-val', 'pt-fd-path', 'pt-seeking', 'pt-tlb-path', 'pt-tlb-lbl'].forEach(id => {
+          const e = document.getElementById(id); if (e) e.setAttribute('opacity', '0');
+        });
+      const b = document.getElementById('scan-beam'); if (b) b.setAttribute('opacity', '0');
+      for (let i = 0; i < 12; i++) { const a = document.getElementById(`tr-arr-${i}`); if (a) a.setAttribute('opacity', '0'); }
+    }
+    function showAddr(page, offset) {
+      setTxt('p-val', page); setTxt('d-val', offset);
+      document.getElementById('p-box').setAttribute('fill', '#1a4880');
+      document.getElementById('p-lbl').setAttribute('fill', '#00f0ff');
+      show('v-bus-dyn');
+    }
+    function resetAddr() {
+      setTxt('p-val', '—'); setTxt('d-val', '—');
+      document.getElementById('p-box').setAttribute('fill', '#133a6a');
+      document.getElementById('p-lbl').setAttribute('fill', '#3db8ff');
+      const vbus = document.getElementById('v-bus-dyn');
+      if (vbus) vbus.setAttribute('opacity', '0');
+    }
+    function hlRamFrame(frame) {
+      const idx = frame % Math.min(S.numFrames, 9);
+      const bg = document.getElementById(`ram-bg-${idx}`);
+      const lb = document.getElementById(`ram-lbl-${idx}`);
+      if (bg) { bg.setAttribute('fill', '#0e3820'); bg.setAttribute('stroke', '#00f07a'); }
+      if (lb) lb.setAttribute('fill', '#00f07a');
+    }
+    function updateRamDisplay() {
+      // We loop through the visible RAM frames (your code limits this to 9)
+      for (let i = 0; i < Math.min(S.numFrames, 9); i++) {
+        const lb = document.getElementById(`ram-lbl-${i}`);
+        if (!lb) continue;
+
+        // Find if there is a page currently assigned to this frame index
+        const entry = S.ram.find(r => r.frameIdx === i);
+
+        if (entry) {
+          // Update the SVG text to show Frame number and the Page it holds
+          lb.textContent = `F${i}: Page ${entry.page}`;
+          lb.setAttribute('fill', '#00f07a'); // Make it bright when occupied
+        } else {
+          lb.textContent = `F${i}: Empty`;
+          lb.setAttribute('fill', '#185028'); // Dim when empty
+        }
+      }
+    }
+    function resetRam() {
+      for (let i = 0; i < 9; i++) {
+        const bg = document.getElementById(`ram-bg-${i}`);
+        const lb = document.getElementById(`ram-lbl-${i}`);
+        if (bg) { bg.setAttribute('fill', '#0c2218'); bg.setAttribute('stroke', '#0e2e1a'); }
+        if (lb) lb.setAttribute('fill', '#185028');
+      }
+    }
+    function glow(id, col) {
+      const e = document.getElementById(id); if (!e) return;
+      e.setAttribute('stroke', col);
+      setTimeout(() => e.setAttribute('stroke', '#00f07a'), 1400);
+    }
+    function updateTlbViz() {
+      for (let i = 0; i < S.tlbSize; i++) {
+        const entry = S.tlb[i];
+        const pEl = document.getElementById(`tr-p-${i}`);
+        const fEl = document.getElementById(`tr-f-${i}`);
+        const bg = document.getElementById(`tr-bg-${i}`);
+        if (entry) {
+          if (pEl) { pEl.textContent = entry.page; pEl.setAttribute('fill', '#3db8ff'); }
+          if (fEl) { fEl.textContent = entry.frame; fEl.setAttribute('fill', '#00f07a'); }
+          if (bg) bg.setAttribute('fill', '#0f2c50');
+        } else {
+          if (pEl) { pEl.textContent = '—'; pEl.setAttribute('fill', '#2a4a70'); }
+          if (fEl) { fEl.textContent = '—'; fEl.setAttribute('fill', '#2a4a70'); }
+          if (bg) bg.setAttribute('fill', '#0c1a30');
+        }
+      }
+    }
+
+    // ════════ STATS & UI ════════
+    function updateStats() {
+      const tot = S.hits + S.misses;
+      const hr = tot ? (S.hits / tot * 100).toFixed(1) : '0';
+      const mr = tot ? (S.misses / tot * 100).toFixed(1) : '0';
+      const emat = tot ? (S.hits / tot * (S.tlbT + S.memT) + S.misses / tot * (S.tlbT + 2 * S.memT)).toFixed(1) : '—';
+      document.getElementById('s-total').textContent = tot;
+      document.getElementById('s-hits').textContent = S.hits;
+      document.getElementById('s-misses').textContent = S.misses;
+      document.getElementById('s-hr').textContent = hr + '%';
+      document.getElementById('s-mr').textContent = mr + '%';
+      document.getElementById('s-emat').textContent = emat;
+    }
+    function renderSnap(entries) {
+      const tb = document.getElementById('snap-tb'); tb.innerHTML = '';
+      for (let i = 0; i < S.tlbSize; i++) {
+        const e = entries[i]; const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${i}</td><td>${e ? 'P' + e.page : '—'}</td><td>${e !== undefined ? e.frame : '—'}</td>
+      <td>${e ? '<span style="color:var(--green)">Valid</span>' : '<span style="color:var(--text3)">Empty</span>'}</td>`;
+        tb.appendChild(tr);
+      }
+    }
+    function addHistRow(n, page, isHit, frame, emat) {
+      const tb = document.getElementById('hist-tb');
+      const tr = document.createElement('tr');
+      tr.className = isHit ? 'tr-hit' : 'tr-miss';
+      tr.innerHTML = `<td>${n}</td><td>P${page}</td>
+    <td>${isHit ? '<span class="bh">HIT</span>' : '<span class="bm">MISS</span>'}</td>
+    <td>${frame}</td><td>${emat}</td>`;
+      tr.style.animation = 'fadein .3s ease';
+      tb.insertBefore(tr, tb.firstChild);
+    }
+    function addLog(msg, cls) {
+      const b = document.getElementById('logbox');
+      const d = document.createElement('div'); d.className = 'le ' + (cls || '');
+      const now = new Date();
+      const ts = `${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+      d.innerHTML = `<span class="lts">[${ts}]</span>${msg}`;
+      b.insertBefore(d, b.firstChild);
+    }
+    function setStep(a, b = '') {
+      document.getElementById('step-a').textContent = a;
+      document.getElementById('step-b').textContent = b;
+    }
+    function setProgress(p) { document.getElementById('prog').style.width = p + '%'; }
+    function show(id) { const e = document.getElementById(id); if (e) e.setAttribute('opacity', '1'); }
+    function setTxt(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }
+    function togglePause() {
+      if (!S.running || S.stepMode) return;
+      S.paused = !S.paused;
+      const btn = document.getElementById('btn-pause');
+      if (S.paused) { btn.textContent = '▶ Resume'; addLog('Simulation paused.', 'le-info'); setStep('⏸ Paused — press Resume to continue'); }
+      else { btn.textContent = '⏸ Pause'; addLog('Simulation resumed.', 'le-info'); }
+    }
+    function finish() {
+      S.running = false;
+      document.getElementById('btn-run').textContent = '▶ Run Simulation';
+      document.getElementById('btn-pause').style.display = 'none';
+      const tot = S.hits + S.misses;
+      const hr = tot ? (S.hits / tot * 100).toFixed(1) : '0';
+      setStep(`Simulation complete — ${tot} references processed`, `Hit ratio: ${hr}%  |  Misses: ${S.misses}`);
+      addLog(`Done. Hits:${S.hits} Misses:${S.misses} Hit Ratio:${hr}%`, 'le-info');
+      setProgress(100);
+    }
+  </script>
+</body>
+
+</html>
